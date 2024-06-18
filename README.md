@@ -1,7 +1,6 @@
 # Cyclistic Bike-Share Analysis: README
 ## Project Overview
-This project analyzes the usage patterns of the Cyclistic bike-share program in Chicago. The primary goal is to understand the differences in behavior between casual riders and annual members. The insights gathered will help Cyclistic tailor marketing strategies to convert casual riders into annual members and improve overall user experience.
-
+This project analyzes the usage patterns of the Cyclistic bike-share program in Chicago. The primary goal is to understand the differences in behavior between casual riders and annual members. The insights gathered will help Cyclistic tailor marketing strategies to convert casual riders into annual members and improve overall user experience. You can explore the dataset at: https://divvytripdata.s3.amazonaws.com/index.html
 ## Contents
 1. [Introduction](#introduction)
 2. [Data Extraction and Cleaning](#section2)
@@ -16,16 +15,16 @@ This project analyzes the usage patterns of the Cyclistic bike-share program in 
 Cyclistic offers bike rentals to both casual riders and annual members. This analysis investigates ride durations, temporal patterns, and geographic distributions to identify distinct usage patterns.
 
 ## Data Extraction and Cleaning <a name="section2"></a>
-Tools Used: SQL, R
+Tools Used: 
+- SQL: Monthly data was extracted and cleaned using SQL queries.
+- R: Further analysis and visualization were conducted using R.
 
-SQL: Monthly data was extracted and cleaned using SQL queries.
-R: Further analysis and visualization were conducted using R.
-SQL Data Retrieval:
+## SQL Data Retrieval:
 
-# Setting up the connection
+### Setting up the connection from R to SQL
 con <- dbConnect(odbc::odbc(), Driver = "SQL Server", Server = server, Database = database, Trusted_Connection = "Yes")
 
-# Fetching the data
+### Fetching the data from SQL
 - query <- "SELECT * FROM CycleData"
 - df <- dbGetQuery(con, query)
 
@@ -39,13 +38,15 @@ con <- dbConnect(odbc::odbc(), Driver = "SQL Server", Server = server, Database 
 - **Weekly**: Casual riders peak on weekends; annual members show consistent usage throughout the week with slight peaks on weekdays.
 - **Seasonal**: Both groups peak in summer months, with casual riders showing more seasonal variability.
 - **Geographic** Distribution: Scatter plot showing start stations for both casual riders and annual members
-
-Differences in popular ride start locations for casual riders and annual members.
+- Differences in popular ride start locations for casual riders and annual members.
 
 ## Visualizations <a name="section4"></a>
-- Average and Count of Trips
-- Median and Outliers
-- Mode and Standard Deviation
+- Average Dureation of Trips
+- Total Amount of Trips 
+- Median of Trip Duration
+- Outliers
+- Mode
+- Standard Deviation of Trip Duration
 - Hourly Ride Trend
 - Weekly Analysis
 - Monthly Ride Trend
@@ -61,6 +62,8 @@ Differences in popular ride start locations for casual riders and annual members
 ## Files Included <a name="section6"></a>
 - Cyclistic_Bike-Share_Analysis.pptx: PowerPoint presentation with detailed analysis and visualizations.
 - Cyclistic_Bike-Share_Analysis.docx: Detailed report with methodology, analysis, and insights.
+- PNG: Plots of each visualization
+- Cyclistic Dataset : https://divvy-tripdata.s3.amazonaws.com/index.html
 
 ## Setup and Usage <a name="section7"></a>
 ### Install Necessary Packages
