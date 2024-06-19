@@ -1,0 +1,467 @@
+---
+title: "Cyclist Data Analysis"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+---
+
+## Data Extraction and Initial Setup
+First, we need to install and load the necessary packages to extract and manipulate our data from the SQL Server database.
+
+## Install necessary packages if not already installed
+```{r warning=FALSE}
+#install.packages("odbc")
+#install.packages("DBI")
+#install.packages("kableExtra")
+```
+Next, we load the required libraries.
+## Load required libraries
+
+Database Connection
+We need to set up the database connection details and connect to the SQL Server database.
+```{r warning=FALSE}
+library(odbc)
+library(DBI)
+library(tidyverse)
+library(skimr)
+library(janitor)
+library(tibble)
+library(ggplot2)
+library(knitr)        # For table formatting
+library(dplyr)
+library(kableExtra)   # For table styling
+```
+
+
+## Set up database connection details
+```{r}
+server <- 'SAMMYLAYO\\SQLEXPRESS02'
+database <- 'Cyclisist'
+```
+
+## Connect to SQL Server database
+```{r}
+con <- dbConnect(odbc::odbc(),
+                 Driver = "SQL Server",
+                 Server = server,
+                 Database = database,
+                 Trusted_Connection = "Yes")
+```
+
+Data Retrieval
+After establishing the connection, we fetch the data using an SQL query and store it in a data frame.
+
+SQL query to fetch data
+```{r}
+query <- "SELECT * FROM CycleData"
+```
+Execute the query and fetch the data into a data frame
+```{r}
+df <- dbGetQuery(con, query)
+```
+Data Overview
+We will now display some basic information about the data to understand its structure.
+
+## Display basic information about the data
+```{r}
+head(df)      # Displaying the first few rows of the data frame
+str(df)       # Showing the structure of the data frame
+colnames(df)  # Listing column names of the data frame
+```
+We can also use some additional functions to summarize the data without charts.
+
+## Summarize data without charts
+```{r}
+skim_without_charts(df)  # Summary statistics without charts
+glimpse(df)              # Concise summary of the data frame structure
+```
+
+Custom Theme Definition
+Let's define a custom theme for our visualizations to ensure they have a consistent appearance.
+
+## Define a custom codes
+```{r}
+custom_theme <- theme_minimal() +
+  theme(
+    plot.background = element_rect(fill = "lightblue", color = NA),
+    panel.background = element_rect(fill = "white"),
+    text = element_text(size = 14)
+  )
+
+angled_text <- theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+color_scale <- scale_fill_manual(values = c("member" = "blue", "casual" = "red"))
+
+# Set breaks for better readability
+grid_line <- function(max) {
+  scale_y_continuous(
+    breaks = seq(0, max, by = max/15),
+    minor_breaks = seq(0, max, by = max/30)
+  )
+}
+```
+
+# Create Histogram Showing Number of Trips by Member Type
+
+This histogram visualizes the distribution of trips by member type. The y-axis represents the number of trips, and the x-axis categorizes trips into 'member' and 'casual' types.
+
+```{r trips_histogram, echo=FALSE}
+# Create the plot
+Trips_count <- ggplot(df, aes(x = member_casual, fill = member_casual)) +
+  geom_bar(color = "black") +
+  labs(title = "Number of Trips by Member Type", x = "Member Type", y = "Number of Trips") +
+  theme_minimal() +
+  color_scale +
+  custom_theme +
+  grid_line(max=6000000)
+
+# Print the plot
+print(Trips_count)
+```
+The bar heights for 'casual' members are slightly above 2 million, while for 'member' members, they exceed 3.6 million.
+
+#Average Trip Duration
+```{r}
+data_summary <- df %>%
+  group_by(member_casual) %>%
+  summarise(
+    mean_duration = mean(TripDurationMin),
+    se = sd(TripDurationMin) / sqrt(n())
+  )
+
+avg_trip_duration_plot <- ggplot(data_summary, aes(x = member_casual, y = mean_duration, fill = member_casual)) +
+  geom_bar(stat = "identity", color = "black", width = 0.7) +
+  geom_errorbar(aes(ymin = mean_duration - se, ymax = mean_duration + se), width = 0.2) +
+  labs(title = "Average Trip Duration", x = "User Type", y = "Average Trip Duration (Min)") +
+  theme_minimal() +
+  color_scale +
+  custom_theme +
+  grid_line(max=60)
+
+print(avg_trip_duration_plot)
+
+```
+The bar plot with error bars shows that casual users have an average trip duration of around 28 minutes, while members have a shorter average trip duration of around 12 minutes.
+
+#Box Plot of Outlier Trip Duration
+```{r}
+Outlier_plot <- ggplot(df, aes(x = member_casual, y = TripDurationMin)) +
+  geom_boxplot() +
+  labs(title = "Box Plot of Outlier Trip Duration", x = "Member Type", y = "Trip Duration (Min)") +
+  custom_theme +
+  grid_line(max=150000)
+
+print(Outlier_plot)
+
+```
+The box plot shows significant outliers in trip duration for both casual and member users, with casual users having more extreme outliers.
+
+#Median Trip Duration of an Hour or Less
+```{r}
+df_filtered <- df %>%
+  filter(TripDurationMin <= 60)
+
+Median_plot <- ggplot(df_filtered, aes(x = member_casual, y = TripDurationMin, fill = member_casual)) +
+  geom_boxplot() +
+  labs(title = "Median Trip Duration of an hour or less", x = "Member Type", y = "Trip Duration (Min)") +
+  theme_minimal() +
+  color_scale +
+  custom_theme +
+  grid_line(max=60)
+
+print(Median_plot)
+```
+The plot indicates that the median trip duration for casual riders is higher than that for members. Most casual trips last around 20 minutes, while most member trips last around 10 minutes.
+
+
+#Mode of Trip Duration
+Now, let's create a histogram to display the mode of trip duration by member type. We'll make sure the mode values are displayed inside the bars.
+
+
+```{r}
+# Calculate the mode for each group
+mode_function <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+modes <- df %>%
+  group_by(member_casual) %>%
+  summarise(mode_duration = mode_function(TripDurationMin))
+
+# Count the occurrences of the mode for each group
+mode_counts <- df %>%
+  filter(TripDurationMin %in% modes$mode_duration) %>%
+  group_by(member_casual, TripDurationMin) %>%
+  summarise(count = n()) %>%
+  ungroup() %>%
+  inner_join(modes, by = c("member_casual", "TripDurationMin" = "mode_duration"))
+
+# Create Mode for the Trips
+mode_histogram <- ggplot(mode_counts, aes(x = member_casual, y = count, fill = member_casual)) +
+  geom_bar(stat = "identity", color = "black") +
+  geom_text(aes(label = TripDurationMin), position = position_stack(vjust = 0.5), size = 5) +
+  labs(title = "Mode of Trip Duration by Member Type", x = "Member Type", y = "Count of Mode Trip Duration") +
+  custom_theme +
+  color_scale
+
+print(mode_histogram)
+```
+The plot shows that there are more members with a trip time of 4 minutes, while the casual riders, though have a lesser count, spend more time.
+
+#Mean and Standard Deviation of Trip Durations
+```{r}
+# Calculate mean and standard deviation for each member type
+mean_stdev <- df %>%
+  group_by(member_casual) %>%
+  summarise(Mean = mean(TripDurationMin), sd = sd(TripDurationMin))
+
+# Plot mean with error bars for standard deviation
+ggplot(mean_stdev, aes(x = member_casual, y = Mean, fill = member_casual)) +
+  geom_bar(position = position_dodge(), stat = "identity", colour = 'black') +
+  geom_errorbar(aes(ymin = Mean - sd, ymax = Mean + sd), width = 0.2) +
+  labs(title = "Mean and Standard Deviation", x = "Member Type", y = "Mean Trip Duration (Min)") +
+  theme_minimal() +
+  custom_theme +
+  color_scale +
+  grid_line(max = 600)
+```
+The mean trip duration for casual riders is significantly higher than for members. Casual riders also have a larger standard deviation, indicating more variability in trip durations.
+
+#Number of Rides by Weekday
+```{r}
+# Plot number of rides by weekday
+df_aggregated <- df %>%
+  group_by(WeekDay, member_casual) %>%
+  summarize(Count = n()) %>%
+  ungroup()
+df_aggregated$WeekDay <- factor(df_aggregated$WeekDay, levels = c("Monday","Tuesday","Wednesday","Thursday","Friday", "Saturday", "Sunday"))
+
+ggplot(df_aggregated, aes(x = WeekDay, y = Count, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("casual" = "red", "member" = "blue")) +
+  labs(title = "Number of Rides by Weekday", x = "Weekday", y = "Number of Rides") +
+  theme_minimal() +
+  custom_theme +
+  angled_text +
+  grid_line(max = 900000)
+
+```
+The plot shows the distribution of rides throughout the week, with both casual and member riders having more rides on weekends compared to weekdays.
+
+#Distribution of Ride Durations Below 60 Minutes
+```{r}
+# Plot distribution of ride durations below 60 minutes
+ggplot(df_filtered, aes(x = TripDurationMin, fill = member_casual)) +
+  geom_histogram(binwidth = 5, alpha = 0.6, position = "identity") +
+  color_scale +
+  labs(title = "Count of Trips below an hour", x = "Trip Duration (minutes)", y = "Count") +
+  theme_minimal() +
+  custom_theme +
+  grid_line(max = 1500000)
+```
+The histogram reveals that the majority of trips for both casual and member riders are clustered between 5 to 20 minutes, with casual riders having a higher count of longer trips compared to members.
+
+#Monthly Ride Trends by Rider Type
+```{r}
+# Plot monthly ride trends by rider type
+df <- df %>%
+  mutate(Month = factor(month(started_at, label = TRUE, abbr = FALSE), levels = month.name))  # Order months by name
+
+monthly_rides <- df %>%
+  group_by(Month, member_casual) %>%
+  summarize(Count = n()) %>%
+  ungroup()
+
+ggplot(monthly_rides, aes(x = Month, y = Count, color = member_casual, group = member_casual)) +
+  geom_line(size = 1.2, alpha = 0.8) +
+  scale_color_manual(values = c("casual" = "red", "member" = "blue")) +
+  labs(title = "Monthly Ride Trends by Rider Type", x = "Month", y = "Number of Rides") +
+  theme_minimal() +
+  custom_theme +
+  grid_line(max = 600000) +
+  angled_text
+```
+The line plot shows the monthly ride trends for both casual and member riders, indicating seasonal variations in ridership with peaks during the summer months and declines during the winter months
+
+#Distribution of Ride Durations by Month and Rider Type
+```{r}
+# Plot distribution of ride durations by month and rider type
+df_filter <- df %>%
+  filter(TripDurationMin < 30)
+
+ggplot(df_filter, aes(x = Month, y = TripDurationMin, fill = member_casual)) +
+  geom_boxplot(alpha = 0.8, outlier.size = 2) +
+  color_scale +
+  labs(title = "Distribution of Ride Durations by Month", x = "Month", y = "Trip Duration (minutes)") +
+  theme_minimal() + custom_theme + angled_text + grid_line(max=45)
+```
+This plot shows that casual riders (red) generally have longer ride durations compared to members (blue), with notable consistency across the months. The median trip duration for casual riders is higher throughout the year.
+
+#Hourly Ride Trends by Rider Type
+```{r}
+# Plot hourly ride trends by rider type
+df <- df %>%
+  mutate(Hour = hour(started_at))
+
+ggplot(df, aes(x = Hour, fill = member_casual)) +
+  geom_histogram(binwidth = 1, alpha = 0.6, position = "identity") +
+  color_scale +
+  labs(title = "Hourly Ride Trends by Rider Type", x = "Hour of Day", y = "Count") +
+  theme_minimal() + grid_line(max=450000) + custom_theme
+```
+The histogram highlights peak ride hours, showing that members (blue) have significant ride counts during morning and evening hours, indicating commuting patterns. Casual riders (red) have more scattered ride times throughout the day, with a peak around the afternoon.
+
+#Average Ride Duration by Weekday and Rider Type
+```{r}
+# Calculate average ride duration by weekday and rider type
+df <- df %>%
+  mutate(RideDurationMin = as.numeric(difftime(ended_at, started_at, units = "mins")))
+
+avg_duration <- df %>%
+  group_by(WeekDay, member_casual) %>%
+  summarize(AvgDuration = mean(RideDurationMin, na.rm = TRUE))
+
+# Define the order of weekdays
+weekday_order <- c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+
+avg_duration$WeekDay <- factor(avg_duration$WeekDay, levels = weekday_order, ordered = TRUE)
+
+ggplot(avg_duration, aes(x = WeekDay, y = AvgDuration, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.8) +
+  color_scale + 
+  labs(title = "Average Ride Duration by Weekday", x = "Weekday", y = "Average Ride Duration (minutes)") +
+  theme_minimal() + custom_theme + angled_text + grid_line(max=60)
+```
+This bar plot shows that casual riders consistently have longer average ride durations compared to members. The longest average durations for casual riders are on Sundays and Saturdays, indicating more leisurely rides during weekends.
+
+#Ride Counts Over Time by Rider Type
+```{r}
+# Plot ride counts over time by rider type
+df <- df %>%
+  mutate(MonthYear = format(started_at, "%Y-%m"),
+         Month = month(started_at, label = TRUE, abbr = FALSE),
+         Year = year(started_at))
+
+ride_counts <- df %>%
+  group_by(MonthYear, member_casual) %>%
+  summarize(TotalRides = n())
+
+ggplot(ride_counts, aes(x = MonthYear, y = TotalRides, color = member_casual, group = member_casual)) +
+  geom_line(size = 1.2) +
+  labs(title = "Ride Counts Over Time by Rider Type", x = "Month-Year", y = "Total Rides") +
+  theme_minimal() + custom_theme + angled_text + color_scale + grid_line(max=600000)
+```
+The line chart illustrates trends in ride counts over time, revealing that member rides (blue) consistently outnumber casual rides (red). Both types show seasonal variation, with peaks in summer and declines in winter. However, the fluctuation is more pronounced for casual riders.
+
+#Mapping Station Locations on a World Map
+First, we need to install and load additional packages for spatial data manipulation and mapping.
+```{r}
+# Install additional packages for mapping
+install.packages("sf")
+install.packages("maps")
+
+library(sf)
+library(maps)
+
+# Read the path to your shapefile
+shapefile_path <- "C:/Users/ADEBAYO/Videos/Boundaries/chicago.dbf"
+shapefile_data <- st_read(shapefile_path)
+
+# Query to get location data
+LocationQuery <- "Select member_casual, start_lat, start_lng, count(*) as Trips
+                  from CycleData
+                  group by member_casual, start_lat, start_lng
+                  having count(*) > 1"
+
+Location <- dbGetQuery(con, LocationQuery)
+
+# Create spatial points data frame
+coordinates_sf <- st_as_sf(Location, coords = c("start_lng", "start_lat"), crs = 4326)
+
+# Create world map data
+world_map <- map_data("world")
+chicago_map <- subset(world_map, region %in% c("illinois", "chicago"))
+
+# Plot locations on world map
+ggplot() +
+  geom_sf(data = shapefile_data, fill = "lightgrey", color = "black") +  # Plot the shapefile
+  geom_sf(data = coordinates_sf, aes(color = member_casual), size = 1, alpha = 0.3) +  # Plot the points
+  scale_color_manual(values = c("member" = "blue", "casual" = "red")) +  # Define colors for each subcategory
+  theme_minimal() +
+  labs(title = "Locations on World Map", x = "Longitude", y = "Latitude") + custom_theme
+```
+This script maps the station locations onto a world map. Points are colored based on the rider type (member or casual). The shapefile data for Chicago is used to provide a detailed map background.
+
+#Identifying Top 10 Popular Start Stations
+The following script analyzes the data to find the top 10 start stations based on ride counts.
+```{r}
+# Analyze popular start stations
+start_station_counts <- df %>% 
+  drop_na() %>%
+  group_by(start_station_name) %>%
+  summarize(TotalRides = n()) %>%
+  top_n(10, TotalRides)  # Top 10 start stations by ride count
+
+ggplot(start_station_counts, aes(x = reorder(start_station_name, TotalRides), y = TotalRides)) +
+  geom_bar(stat = "identity", fill = "black") +
+  labs(title = "Top 10 Popular Start Stations", x = "Start Station", y = "Total Rides") +
+  theme_minimal() + custom_theme + grid_line(max=90000) + angled_text
+```
+This bar plot highlights the top 10 most popular start stations based on the total number of rides originating from each station. The bars are ordered by ride counts and labeled for clarity.
+
+#Conclusion
+Cyclist Data Analysis: Recommendations for Converting Casual Riders to Annual Members
+Based on the analysis of Cyclistic bike-share data, there are significant differences in how casual riders and annual members use the service. These insights can guide the development of a targeted marketing strategy to convert casual riders into annual members, thereby maximizing the company's future growth and profitability.
+
+Key Findings:
+
+Ride Volume and Duration:
+
+Casual riders take fewer trips but have longer average trip durations (around 28 minutes) compared to annual members (around 12 minutes).
+This indicates that casual riders may be using the service more for leisure or extended activities, while members are likely using it for shorter, utilitarian purposes such as commuting.
+Peak Usage Times:
+
+Casual riders show a peak in the afternoon, while members have significant ride counts during morning and evening hours, indicating commute patterns.
+Both groups have higher ride counts on weekends, with casual riders showing more variability in their trip durations.
+Seasonal Trends:
+
+Ride counts for both casual and member riders peak during the summer months and decline in the winter, with casual riders showing more pronounced seasonal fluctuations.
+Geographical Distribution:
+
+Members' rides are more concentrated in specific areas, suggesting routine travel routes, while casual riders' rides are more dispersed, possibly indicating exploratory or leisure rides.
+Top Start Stations:
+
+The analysis identifies the top 10 most popular start stations, which can be focal points for targeted promotions and infrastructure improvements.
+
+#Recommendations
+
+Promotional Offers:
+
+Seasonal Discounts: Offer discounts on annual memberships during peak casual riding seasons (spring and summer) to leverage the higher ride volumes and encourage conversion when casual riders are most engaged.
+Trial Memberships: Introduce short-term trial memberships at a reduced cost to give casual riders a taste of the benefits of being a member without a long-term commitment.
+Marketing Campaigns:
+
+Commute Incentives: Highlight the benefits of annual memberships for daily commuting, such as cost savings and convenience. Use data to show how members save money compared to frequent single-ride or full-day pass purchases.
+Leisure and Exploration: Promote the flexibility and freedom of unlimited rides to casual riders who use the service for leisure. Emphasize the variety of bike options available, including reclining bikes and cargo bikes, which cater to a broader audience.
+Digital Media Strategy:
+
+Targeted Advertising: Utilize digital media channels to target casual riders with personalized ads based on their ride patterns and preferences. For example, display ads that highlight membership benefits during their typical riding hours or seasons.
+Engaging Content: Create engaging content, such as testimonials and success stories from current members, to build social proof and highlight the community aspect of being an annual member.
+Infrastructure and Service Improvements:
+
+Popular Stations: Enhance facilities and services at the top 10 most popular start stations identified in the analysis. This could include better signage, additional docking stations, and promotional materials highlighting membership benefits.
+Exclusive Member Benefits: Introduce exclusive benefits for members, such as priority access to bikes during peak hours or special offers from partner businesses located near popular docking stations.
+Community and Events:
+
+Member-Exclusive Events: Organize community events and rides exclusive to members, creating a sense of belonging and community. This can include guided tours, social rides, and member-only meetups.
+Partnerships: Partner with local businesses and attractions to offer members discounts and incentives, further enhancing the value of an annual membership.
+By implementing these strategies, Cyclistic can effectively convert casual riders into annual members, driving growth and ensuring long-term profitability. The insights derived from the data analysis provide a solid foundation for designing marketing campaigns that resonate with casual riders and highlight the compelling advantages of becoming an annual member.
+
+
+
+
+
+
